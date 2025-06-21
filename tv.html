@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI-Powered p5.js Retro TV</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'VT323', monospace;
+            background-color: #1a1a1a;
+        }
+        .tv-frame {
+            background: #4a3b2a;
+            border: 20px solid #2d241a;
+            border-radius: 40px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.6), inset 0 0 30px rgba(0,0,0,0.7);
+            padding: 40px;
+        }
+        .tv-screen {
+            background: #111;
+            border-radius: 20px;
+            overflow: hidden;
+            box-shadow: inset 0 0 25px rgba(0,0,0,0.8);
+            position: relative;
+            width: 100%;
+            padding-bottom: 75%; 
+            cursor: none;
+        }
+        #p5-canvas-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+        }
+        .controls {
+            border-top: 4px solid #2d241a;
+            margin-top: 40px;
+            padding-top: 20px;
+        }
+        .btn {
+            background: #c0c0c0;
+            border: 2px solid #808080;
+            border-bottom-color: #f0f0f0;
+            border-right-color: #f0f0f0;
+            padding: 8px 16px;
+            font-size: 20px;
+            color: #333;
+            cursor: pointer;
+            box-shadow: 2px 2px 0px #808080;
+            transition: all 0.1s ease;
+        }
+        .btn:active, .btn:disabled {
+            transform: translate(2px, 2px);
+            box-shadow: none;
+            background: #b0b0b0;
+        }
+        .btn:disabled {
+            cursor: not-allowed;
+            opacity: 0.7;
+        }
+        .channel-display {
+            background-color: #222;
+            color: #00ff00;
+            padding: 5px 15px;
+            font-size: 24px;
+            border: 2px inset #444;
+            text-shadow: 0 0 5px #00ff00;
+        }
+        .ai-controls {
+            margin-top: 20px;
+            border-top: 4px solid #2d241a;
+            padding-top: 20px;
+            display: flex;
+            gap: 10px;
+        }
+        .ai-input {
+            flex-grow: 1;
+            background: #222;
+            border: 2px inset #444;
+            color: #00ff00;
+            padding: 8px;
+            font-size: 20px;
+            outline: none;
+        }
+        .ai-input::placeholder {
+            color: #009900;
+            opacity: 0.6;
+        }
+    </style>
+</head>
+<body class="flex items-center justify-center min-h-screen p-4">
+
+    <div class="w-full max-w-4xl">
+        <div class="tv-frame">
+            <!-- TV Screen -->
+            <div class="tv-screen">
+                <div id="p5-canvas-container"></div>
+            </div>
+
+            <!-- Controls -->
+            <div class="controls flex items-center justify-between">
+                <div class="flex items-center space-x-4">
+                     <button id="channel-down" class="btn">&lt;&lt; CH</button>
+                     <button id="channel-up" class="btn">CH &gt;&gt;</button>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <span class="text-xl text-gray-300">CHANNEL</span>
+                    <div id="channel-indicator" class="channel-display">01</div>
+                </div>
+            </div>
+
+            <!-- AI Channel Generator -->
+            <div class="ai-controls">
+                <input type="text" id="prompt-input" class="ai-input" placeholder="Describe a new channel...">
+                <button id="create-channel-btn" class="btn">Create Channel</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentChannel = 1;
+        let totalChannels = 5;
+        let isChangingChannel = false;
+        let channelChangeTime = 0;
+        let temporaryMessage = null;
+
+        // --- Channel-specific variables ---
+        let bouncingBall = { x: 50, y: 50, xspeed: 4, yspeed: 3, size: 40, baseColor: [255, 0, 100], hoverColor: [100, 255, 0] };
+        let starfield = [];
+        let plasmaOffset = 0;
+        
+        // --- User-generated channels ---
+        const userChannels = [];
+
+        // The p5.js sketch
+        const sketch = (p) => {
+
+            p.setup = () => {
+                const container = document.getElementById('p5-canvas-container');
+                const canvas = p.createCanvas(container.offsetWidth, container.offsetHeight);
+                canvas.parent(container);
+                p.pixelDensity(1);
+
+                // Initialize starfield
+                for (let i = 0; i < 400; i++) {
+                    starfield.push({
+                        x: p.random(-p.width, p.width),
+                        y: p.random(-p.height, p.height),
+                        z: p.random(p.width)
+                    });
+                }
+            };
+
+            p.draw = () => {
+                if (temporaryMessage) {
+                    drawTemporaryMessage(p, temporaryMessage.text, temporaryMessage.isError);
+                    if (p.millis() > temporaryMessage.expiry) {
+                        temporaryMessage = null;
+                        isChangingChannel = true; // Show static after message
+                        channelChangeTime = p.millis();
+                    }
+                    return;
+                }
+
+                if (isChangingChannel) {
+                    drawStatic(p);
+                    if (p.millis() - channelChangeTime > 250) {
+                        isChangingChannel = false;
+                    }
+                    return;
+                }
+                
+                // Route to the correct channel function
+                if (currentChannel <= 5) {
+                    drawPredefinedChannel(p);
+                } else {
+                    drawUserChannel(p);
+                }
+            };
+            
+            p.windowResized = () => {
+                const container = document.getElementById('p5-canvas-container');
+                p.resizeCanvas(container.offsetWidth, container.offsetHeight);
+                // Re-initialize user channels that depend on size
+                userChannels.forEach(channel => {
+                    if (channel.setup) {
+                         try {
+                           channel.setup(p);
+                         } catch(e) { console.error("Error re-initializing channel:", e) }
+                    }
+                });
+            };
+
+            // --- Channel Routers ---
+            function drawPredefinedChannel(p) {
+                 switch (currentChannel) {
+                    case 1: drawColorBars(p); break;
+                    case 2: drawBouncingBall(p); break;
+                    case 3: drawStarfield(p); break;
+                    case 4: drawPlasma(p); break;
+                    case 5: drawNewsTicker(p); break;
+                    default: drawStatic(p);
+                }
+            }
+
+            function drawUserChannel(p) {
+                const userChannelIndex = currentChannel - 6;
+                if (userChannelIndex >= 0 && userChannelIndex < userChannels.length) {
+                    const channel = userChannels[userChannelIndex];
+                    try {
+                        channel.draw(p);
+                    } catch (e) {
+                        console.error("Error in user-generated channel:", e);
+                        setTemporaryMessage("CHANNEL ERROR", true);
+                        currentChannel = 1; // Revert to a safe channel
+                    }
+                } else {
+                    drawStatic(p);
+                }
+            }
+            
+            // --- Message & Static ---
+            const drawStatic = (p) => {
+                p.loadPixels();
+                for (let i = 0; i < 4 * (p.width * p.height); i += 4) {
+                    let n = p.floor(p.random(255));
+                    p.pixels[i] = p.pixels[i + 1] = p.pixels[i + 2] = n;
+                    p.pixels[i + 3] = 255;
+                }
+                p.updatePixels();
+            };
+
+            const drawTemporaryMessage = (p, text, isError) => {
+                p.background(0);
+                p.textAlign(p.CENTER, p.CENTER);
+                p.textSize(p.width / 15);
+                p.fill(isError ? '#ff0000' : '#00ff00');
+                p.text(text, p.width/2, p.height/2);
+            };
+
+            // --- Predefined Channel Functions ---
+            const drawColorBars = (p) => {
+                const barWidth = p.width / 7;
+                const colors = [ p.color(192, 192, 192), p.color(192, 192, 0), p.color(0, 192, 192), p.color(0, 192, 0), p.color(192, 0, 192), p.color(192, 0, 0), p.color(0, 0, 192) ];
+                p.noStroke();
+                for (let i = 0; i < colors.length; i++) {
+                    p.fill(colors[i]);
+                    p.rect(i * barWidth, 0, barWidth, p.height * 0.7);
+                }
+                p.fill(0); p.rect(0, p.height * 0.7, p.width, p.height * 0.3);
+                p.fill(255); p.textAlign(p.CENTER, p.CENTER); p.textSize(p.width / 15); p.text("TEST PATTERN", p.width / 2, p.height * 0.85);
+                if (p.mouseX > 0 && p.mouseX < p.width && p.mouseY > 0 && p.mouseY < p.height) {
+                    let y = p.mouseY; let bandHeight = 40; p.noFill(); p.stroke(255, 100);
+                    for(let i = 0; i < 20; i++) { p.strokeWeight(p.random(0.5, 2)); p.line(p.random(p.width), y + p.random(-bandHeight/2, bandHeight/2), p.random(p.width), y + p.random(-bandHeight/2, bandHeight/2)); }
+                }
+            };
+            const drawBouncingBall = (p) => {
+                p.background(20, 0, 40); p.stroke(255); p.strokeWeight(2);
+                let d = p.dist(p.mouseX, p.mouseY, bouncingBall.x, bouncingBall.y);
+                if (d < bouncingBall.size * 2) {
+                    p.fill(bouncingBall.hoverColor);
+                    let angle = p.atan2(p.mouseY - bouncingBall.y, p.mouseX - bouncingBall.x);
+                    bouncingBall.xspeed -= p.cos(angle) * 0.5; bouncingBall.yspeed -= p.sin(angle) * 0.5;
+                } else { p.fill(bouncingBall.baseColor); }
+                bouncingBall.x += bouncingBall.xspeed; bouncingBall.y += bouncingBall.yspeed;
+                bouncingBall.xspeed *= 0.995; bouncingBall.yspeed *= 0.995;
+                if (bouncingBall.x > p.width - bouncingBall.size/2 || bouncingBall.x < bouncingBall.size/2) { bouncingBall.xspeed *= -1; }
+                if (bouncingBall.y > p.height - bouncingBall.size/2 || bouncingBall.y < bouncingBall.size/2) { bouncingBall.yspeed *= -1; }
+                p.ellipse(bouncingBall.x, bouncingBall.y, bouncingBall.size, bouncingBall.size);
+            };
+            const drawStarfield = (p) => {
+                p.background(0); p.translate(p.width / 2, p.height / 2);
+                for (let star of starfield) {
+                    let d = p.dist(star.x / star.z, star.y / star.z, p.mouseX - p.width / 2, p.mouseY - p.height / 2);
+                    let speed = (d < 100) ? p.map(d, 0, 100, 30, 10) : 10;
+                    star.z -= speed;
+                    if (star.z < 1) { star.x = p.random(-p.width, p.width); star.y = p.random(-p.height, p.height); star.z = p.random(p.width); }
+                    let sx = p.map(star.x / star.z, 0, 1, 0, p.width); let sy = p.map(star.y / star.z, 0, 1, 0, p.height);
+                    let r = p.map(star.z, 0, p.width, 8, 0); p.noStroke();
+                    p.fill((d < 100) ? p.color(150, 200, 255) : p.color(255)); p.ellipse(sx, sy, r, r);
+                }
+            };
+            const drawPlasma = (p) => {
+                 p.loadPixels(); plasmaOffset += 0.02;
+                 for (let x = 0; x < p.width; x++) { for (let y = 0; y < p.height; y++) {
+                         let d = p.dist(x, y, p.mouseX, p.mouseY); let mouseFactor = p.constrain(p.map(d, 0, 150, 3, 0), 0, 3);
+                         let v = p.sin(x * 0.1 + plasmaOffset) + p.sin(y * 0.1 + plasmaOffset) + p.sin((x+y)*0.1 + plasmaOffset) + p.sin(p.sqrt(d) * 0.1) * mouseFactor;
+                         let r = p.sin(v * p.PI) * 128 + 128; let g = p.cos(v * p.PI * 0.5) * 128 + 128; let b = p.sin(v * p.PI * 0.25) * 128 + 128;
+                         let i = (x + y * p.width) * 4; p.pixels[i] = r; p.pixels[i+1] = g; p.pixels[i+2] = b; p.pixels[i+3] = 255;
+                 } } p.updatePixels();
+            };
+            let tickerX; let currentNewsItem = 0;
+            const drawNewsTicker = (p) => {
+                const newsItems = [ "P5.JS DECLARED 'ARTIST'S BEST FRIEND'...", "GENERATIVE ART SELLS FOR RECORD PRICES...", "LOCAL PROGRAMMER CREATES VIRTUAL TV...", "STARING AT PIXELS CAN BE MESMERIZING...", "WEATHER: CLOUDY WITH A CHANCE OF PLASMA..." ];
+                p.background(0, 20, 80); p.textAlign(p.LEFT, p.CENTER); const ts = p.constrain(p.width / 25, 16, 32); p.textSize(ts);
+                if (tickerX === undefined) tickerX = p.width; const txt = newsItems[currentNewsItem]; const tw = p.textWidth(txt); const ty = p.height / 2;
+                const isHovering = p.mouseX > tickerX && p.mouseX < tickerX + tw && p.mouseY > ty - ts/2 && p.mouseY < ty + ts/2;
+                if(isHovering) {
+                    p.fill(255, 100, 100); let glitchText = ""; for(let char of txt) { glitchText += p.random() > 0.1 ? char : p.random(["#", "%", "!", "*", "?"]); }
+                    p.text(glitchText, tickerX + p.random(-3, 3), ty + p.random(-3, 3));
+                } else { p.fill(220); p.text(txt, tickerX, ty); }
+                tickerX -= 3; if (tickerX < -tw) { tickerX = p.width; currentNewsItem = (currentNewsItem + 1) % newsItems.length; }
+            };
+        };
+        
+        // --- Global Control Logic ---
+        let p5_instance;
+        document.addEventListener('DOMContentLoaded', () => {
+            const channelUpBtn = document.getElementById('channel-up');
+            const channelDownBtn = document.getElementById('channel-down');
+            const createChannelBtn = document.getElementById('create-channel-btn');
+            const promptInput = document.getElementById('prompt-input');
+            const channelIndicator = document.getElementById('channel-indicator');
+            
+            p5_instance = new p5(sketch);
+
+            const updateChannelDisplay = () => {
+                channelIndicator.textContent = String(currentChannel).padStart(2, '0');
+                isChangingChannel = true;
+                channelChangeTime = p5_instance.millis();
+            };
+
+            channelUpBtn.addEventListener('click', () => {
+                currentChannel++;
+                if (currentChannel > totalChannels) {
+                    currentChannel = 1;
+                }
+                updateChannelDisplay();
+            });
+
+            channelDownBtn.addEventListener('click', () => {
+                currentChannel--;
+                if (currentChannel < 1) {
+                    currentChannel = totalChannels;
+                }
+                updateChannelDisplay();
+            });
+
+            createChannelBtn.addEventListener('click', () => {
+                const userPrompt = promptInput.value.trim();
+                if (userPrompt) {
+                    generateChannel(userPrompt);
+                }
+            });
+
+            promptInput.addEventListener('keyup', (e) => {
+                if (e.key === 'Enter') {
+                    createChannelBtn.click();
+                }
+            });
+        });
+
+        function setTemporaryMessage(text, isError = false, duration = 3000) {
+            temporaryMessage = { text, isError, expiry: p5_instance.millis() + duration };
+        }
+
+        async function generateChannel(userPrompt) {
+            const createBtn = document.getElementById('create-channel-btn');
+            createBtn.disabled = true;
+            createBtn.textContent = 'Tuning...';
+            setTemporaryMessage('GENERATING...');
+
+            const prompt = `
+                You are a p5.js expert. A user wants to create a new TV channel based on the prompt: "${userPrompt}".
+                Generate the necessary JavaScript code to be run inside a p5.js sketch.
+                RULES:
+                1. All p5.js functions MUST be prefixed with 'p.', for example: p.background(0); p.fill(255);.
+                2. If you need variables that persist across draw calls, provide them in the 'setupVars' field. They will be executed once when the channel is created. Declare them with 'this.' (e.g., this.angle = 0;). This is critical.
+                3. The code must be interactive on mouse hover using p.mouseX and p.mouseY.
+                4. Do NOT include 'function draw() { ... }' or 'p.setup()'.
+                5. Keep the code concise and performant. Avoid loading external assets.
+                6. Respond with a single, valid JSON object with two keys: "setupVars" (a string of JS for one-time setup) and "drawFunction" (a string of JS for the draw loop).
+                
+                Example for prompt "spinning rectangle":
+                {
+                  "setupVars": "this.angle = 0; this.speed = 0.05;",
+                  "drawFunction": "p.background(20); p.push(); p.translate(p.width/2, p.height/2); let d = p.dist(p.mouseX, p.mouseY, p.width/2, p.height/2); let interactiveSpeed = p.map(d, 0, p.width/2, 0.2, 0.01); p.rotate(this.angle); p.rectMode(p.CENTER); p.fill(255, 100, 150); p.rect(0, 0, 150, 150); this.angle += interactiveSpeed; p.pop();"
+                }
+            `;
+            
+            try {
+                const apiKey = "";
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`API Error: ${response.statusText}`);
+                }
+
+                const result = await response.json();
+                
+                // Extract the JSON string from the response
+                let rawText = result.candidates[0].content.parts[0].text;
+                rawText = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
+                
+                const generatedCode = JSON.parse(rawText);
+
+                if (!generatedCode.drawFunction) {
+                    throw new Error("AI did not return a valid draw function.");
+                }
+
+                // Create a context object for 'this'
+                const channelContext = {};
+
+                // Create the setup and draw functions
+                const setupFunc = new Function('p', generatedCode.setupVars || '');
+                const drawFunc = new Function('p', generatedCode.drawFunction);
+
+                // Bind the functions to the context
+                const boundSetup = setupFunc.bind(channelContext);
+                const boundDraw = drawFunc.bind(channelContext);
+                
+                // Run the setup once
+                boundSetup(p5_instance);
+
+                // Add the new channel
+                userChannels.push({ name: userPrompt, setup: boundSetup, draw: boundDraw });
+                totalChannels++;
+                currentChannel = totalChannels;
+                
+                document.getElementById('prompt-input').value = '';
+                setTemporaryMessage('CHANNEL CREATED!', false, 1500);
+
+            } catch (error) {
+                console.error('Channel Generation Failed:', error);
+                setTemporaryMessage('FAILED TO TUNE', true);
+            } finally {
+                createBtn.disabled = false;
+                createBtn.textContent = 'Create Channel';
+            }
+        }
+    </script>
+</body>
+</html>
