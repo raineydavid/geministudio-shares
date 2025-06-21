@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Gallery of the Now</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Poppins:wght@300;400;500&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Poppins', sans-serif;
+            background-color: #F8F5F2; /* A warm, off-white gallery wall color */
+        }
+        .font-serif {
+            font-family: 'Playfair Display', serif;
+        }
+        .art-frame {
+            background-color: #1a1a1a;
+            border: 20px solid #2d1a0c; /* A dark, wood-like color */
+            padding: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3), 0 0 8px rgba(0,0,0,0.5) inset;
+            position: relative;
+        }
+        #drawingCanvas {
+            position: absolute;
+            top: 20px; /* Offset by padding */
+            left: 20px; /* Offset by padding */
+            width: calc(100% - 40px);
+            height: calc(100% - 40px);
+            cursor: crosshair;
+        }
+        video {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+        .art-plaque {
+            background-color: #e6d8c7;
+            color: #4a3a2a;
+            border: 1px solid #c3b097;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+        .custom-btn {
+            transition: all 0.2s ease-in-out;
+            border: 1px solid transparent;
+        }
+        .custom-btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+        }
+        .custom-btn:active:not(:disabled), .tool-btn.active {
+            transform: translateY(0);
+            background-color: #c9b49c;
+        }
+        .tool-btn.active {
+            border-color: #4a3a2a;
+            color: #2d1a0c;
+        }
+        .placeholder-text {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #ccc;
+            text-align: center;
+            font-size: 1.1rem;
+            pointer-events: none;
+        }
+        input[type="color"] {
+            -webkit-appearance: none;
+            border: none;
+            width: 40px;
+            height: 40px;
+        }
+        input[type="color"]::-webkit-color-swatch-wrapper {
+            padding: 0;
+        }
+        input[type="color"]::-webkit-color-swatch {
+            border: 1px solid #777;
+            border-radius: 50%;
+        }
+        /* Critic styles */
+        #critic-container {
+            transition: opacity 0.5s;
+        }
+        #critic-emoji {
+            font-size: 4rem;
+            transition: transform 0.2s ease-in-out;
+        }
+        .pulsing {
+            animation: pulse 0.5s infinite alternate;
+        }
+        @keyframes pulse {
+            from { transform: scale(1); }
+            to { transform: scale(1.15); }
+        }
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #4a3a2a;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="text-gray-800 flex items-center justify-center min-h-screen p-4">
+
+    <div class="max-w-3xl w-full mx-auto">
+        <header class="text-center mb-8">
+            <h1 class="font-serif text-4xl md:text-5xl text-gray-900">The Gallery of the Now</h1>
+            <p class="text-gray-600 mt-2">An Exhibit of Fleeting Self-Portraiture</p>
+        </header>
+
+        <main>
+            <!-- Art Piece -->
+            <div class="art-frame rounded-sm mb-4">
+                <div id="placeholder" class="placeholder-text">
+                    <p>The canvas awaits the artist.</p>
+                    <p class="text-sm">(Your masterpiece will appear here)</p>
+                </div>
+                <video id="webcam" playsinline autoplay></video>
+                <canvas id="drawingCanvas"></canvas>
+            </div>
+            
+            <!-- The Critic -->
+            <div id="critic-container" class="my-6 flex-col items-center gap-2 hidden">
+                <div id="critic-emoji">👨‍🎨</div>
+                <div id="critic-loader" class="loader hidden"></div>
+            </div>
+
+            <!-- Artist's Tools -->
+            <div id="drawing-controls" class="bg-white/50 backdrop-blur-sm p-3 rounded-lg mb-6 justify-center items-center gap-4 hidden">
+                <!-- ... tool buttons ... -->
+                <button id="pen-tool" title="Pen" class="tool-btn custom-btn bg-white hover:bg-gray-100 text-gray-700 font-medium py-2 px-3 rounded-md flex items-center space-x-2">
+                    <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path d="M17.414 2.586a2 2 0 00-2.828 0L7 10.172V13h2.828l7.586-7.586a2 2 0 000-2.828z"></path><path fill-rule="evenodd" d="M2 6a2 2 0 012-2h4a1 1 0 010 2H4v10h10v-4a1 1 0 112 0v4a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" clip-rule="evenodd"></path></svg>
+                </button>
+                <button id="eraser-tool" title="Eraser" class="tool-btn custom-btn bg-white hover:bg-gray-100 text-gray-700 font-medium py-2 px-3 rounded-md flex items-center space-x-2">
+                    <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M19.406 4.594a2.25 2.25 0 00-3.182 0l-10 10a2.25 2.25 0 000 3.182l4.406 4.406a2.25 2.25 0 003.182 0l10-10a2.25 2.25 0 000-3.182l-4.406-4.406zM6.75 16.5l10.5-10.5"></path></svg>
+                </button>
+                <input type="color" id="color-picker" title="Select Color" value="#B45309" class="cursor-pointer">
+                <div class="flex items-center space-x-2 text-gray-600">
+                    <input type="range" id="brush-size" min="1" max="50" value="5" class="w-24 cursor-pointer accent-amber-800">
+                </div>
+                <button id="clear-canvas" class="custom-btn bg-white hover:bg-gray-100 text-gray-700 font-medium py-2 px-3 rounded-md">Clear</button>
+            </div>
+
+            <!-- Action Controls -->
+            <div class="flex flex-col sm:flex-row items-center justify-center space-y-4 sm:space-y-0 sm:space-x-4 mb-6">
+                <button id="startButton" class="custom-btn w-full sm:w-auto bg-amber-800 hover:bg-amber-900 text-white font-bold py-3 px-8 rounded-md disabled:opacity-50">
+                    Unveil Masterpiece
+                </button>
+                <button id="photoButton" class="custom-btn w-full sm:w-auto bg-gray-700 hover:bg-gray-800 text-white font-bold py-3 px-8 rounded-md disabled:opacity-50" disabled>
+                    Capture for Posterity
+                </button>
+            </div>
+
+            <!-- The Acquisition -->
+            <div id="photo-output" class="hidden text-center">
+                 <h2 class="font-serif text-2xl text-center mb-4">A Permanent Acquisition</h2>
+                <canvas id="snapshotCanvas" class="max-w-lg w-full mx-auto rounded-sm shadow-lg art-frame"></canvas>
+                <div class="text-center mt-6">
+                    <a id="downloadLink" href="#" class="custom-btn inline-block bg-amber-800 hover:bg-amber-900 text-white font-bold py-3 px-8 rounded-md">
+                       Acquire Artwork (PNG)
+                    </a>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        // --- DOM Elements ---
+        const video = document.getElementById('webcam');
+        const startButton = document.getElementById('startButton');
+        const photoButton = document.getElementById('photoButton');
+        const downloadLink = document.getElementById('downloadLink');
+        const photoOutput = document.getElementById('photo-output');
+        const placeholder = document.getElementById('placeholder');
+        
+        // Critic Elements
+        const criticContainer = document.getElementById('critic-container');
+        const criticEmoji = document.getElementById('critic-emoji');
+        const criticLoader = document.getElementById('critic-loader');
+
+        // Drawing elements
+        const drawingCanvas = document.getElementById('drawingCanvas');
+        const drawingContext = drawingCanvas.getContext('2d');
+        const drawingControls = document.getElementById('drawing-controls');
+        const penToolBtn = document.getElementById('pen-tool');
+        const eraserToolBtn = document.getElementById('eraser-tool');
+        const colorPicker = document.getElementById('color-picker');
+        const brushSizeSlider = document.getElementById('brush-size');
+        const clearCanvasBtn = document.getElementById('clear-canvas');
+
+        // Snapshot canvas
+        const snapshotCanvas = document.getElementById('snapshotCanvas');
+
+        // --- State Variables ---
+        let stream = null;
+        let isDrawing = false;
+        let currentTool = 'pen';
+        let lastX = 0;
+        let lastY = 0;
+
+        // --- Event Listeners ---
+        startButton.addEventListener('click', toggleWebcam);
+        photoButton.addEventListener('click', takePhotoAndCritique);
+        penToolBtn.addEventListener('click', () => setTool('pen'));
+        eraserToolBtn.addEventListener('click', () => setTool('eraser'));
+        clearCanvasBtn.addEventListener('click', clearDrawingCanvas);
+        
+        drawingCanvas.addEventListener('mousedown', startDrawing);
+        drawingCanvas.addEventListener('mousemove', draw);
+        drawingCanvas.addEventListener('mouseup', stopDrawing);
+        drawingCanvas.addEventListener('mouseout', stopDrawing);
+        drawingCanvas.addEventListener('touchstart', (e) => { e.preventDefault(); startDrawing(e.touches[0]); }, { passive: false });
+        drawingCanvas.addEventListener('touchmove', (e) => { e.preventDefault(); draw(e.touches[0]); }, { passive: false });
+        drawingCanvas.addEventListener('touchend', stopDrawing);
+
+        // --- Functions ---
+        
+        function toggleWebcam() {
+            if (stream) {
+                stopWebcam();
+            } else {
+                startWebcam();
+            }
+        }
+
+        function resizeDrawingCanvas() {
+            const videoRect = video.getBoundingClientRect();
+            drawingCanvas.width = videoRect.width;
+            drawingCanvas.height = videoRect.height;
+        }
+
+        async function startWebcam() {
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: "user" } 
+                });
+                video.srcObject = stream;
+                video.onloadedmetadata = () => {
+                    placeholder.classList.add('hidden');
+                    startButton.textContent = 'End the Exhibit';
+                    photoButton.disabled = false;
+                    drawingControls.classList.remove('hidden');
+                    drawingControls.classList.add('flex');
+                    criticContainer.classList.add('hidden');
+                    criticContainer.classList.remove('flex');
+
+                    setTimeout(resizeDrawingCanvas, 100);
+                    setTool('pen');
+                    window.addEventListener('resize', resizeDrawingCanvas);
+                };
+            } catch (err) {
+                console.error("Error accessing webcam: ", err);
+                placeholder.innerHTML = "<p>The gallery is unable to procure a subject.</p><p class='text-sm'>(Please enable camera permissions.)</p>";
+            }
+        }
+        
+        function stopWebcam() {
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+                window.speechSynthesis.cancel(); // Stop any ongoing critique
+            }
+            stream = null;
+            video.srcObject = null;
+            
+            placeholder.classList.remove('hidden');
+            startButton.textContent = 'Unveil Masterpiece';
+            photoButton.disabled = true;
+            photoOutput.classList.add('hidden');
+            drawingControls.classList.add('hidden');
+            drawingControls.classList.remove('flex');
+            criticContainer.classList.add('hidden');
+            criticContainer.classList.remove('flex');
+            clearDrawingCanvas();
+            
+            window.removeEventListener('resize', resizeDrawingCanvas);
+        }
+        
+        function setTool(tool) {
+            currentTool = tool;
+            penToolBtn.classList.toggle('active', tool === 'pen');
+            eraserToolBtn.classList.toggle('active', tool === 'eraser');
+            drawingCanvas.style.cursor = tool === 'pen' ? 'crosshair' : 'grab';
+        }
+        
+        function clearDrawingCanvas() {
+            drawingContext.clearRect(0, 0, drawingCanvas.width, drawingCanvas.height);
+        }
+
+        function getEventCoords(e) {
+            const rect = drawingCanvas.getBoundingClientRect();
+            const clientX = e.clientX || e.touches[0].clientX;
+            const clientY = e.clientY || e.touches[0].clientY;
+            return [clientX - rect.left, clientY - rect.top];
+        }
+
+        function startDrawing(e) { isDrawing = true; [lastX, lastY] = getEventCoords(e); }
+        function stopDrawing() { isDrawing = false; }
+
+        function draw(e) {
+            if (!isDrawing) return;
+            const [currentX, currentY] = getEventCoords(e);
+            drawingContext.beginPath();
+            drawingContext.lineJoin = 'round';
+            drawingContext.lineCap = 'round';
+            drawingContext.lineWidth = brushSizeSlider.value;
+            drawingContext.globalCompositeOperation = (currentTool === 'pen') ? 'source-over' : 'destination-out';
+            drawingContext.strokeStyle = colorPicker.value;
+            drawingContext.moveTo(lastX, lastY);
+            drawingContext.lineTo(currentX, currentY);
+            drawingContext.stroke();
+            [lastX, lastY] = [currentX, currentY];
+        }
+
+        /**
+         * Takes a photo, displays it, and triggers the AI critic.
+         */
+        async function takePhotoAndCritique() {
+            if (!stream) return;
+            
+            // 1. Capture the image
+            const snapshotContext = snapshotCanvas.getContext('2d');
+            snapshotCanvas.width = video.videoWidth;
+            snapshotCanvas.height = video.videoHeight;
+            snapshotContext.drawImage(video, 0, 0, snapshotCanvas.width, snapshotCanvas.height);
+            
+            // Draw drawings on top
+            const tempCanvas = document.createElement('canvas');
+            const tempCtx = tempCanvas.getContext('2d');
+            tempCanvas.width = snapshotCanvas.width;
+            tempCanvas.height = snapshotCanvas.height;
+            tempCtx.drawImage(drawingCanvas, 0, 0, drawingCanvas.width, drawingCanvas.height, 0, 0, tempCanvas.width, tempCanvas.height);
+            snapshotContext.drawImage(tempCanvas, 0, 0);
+            
+            // 2. Prepare for download
+            downloadLink.href = snapshotCanvas.toDataURL('image/png');
+            downloadLink.download = 'my-masterpiece.png';
+            
+            // 3. Show the captured photo
+            photoOutput.classList.remove('hidden');
+            photoOutput.scrollIntoView({ behavior: 'smooth' });
+
+            // 4. Get the critique from Gemini
+            const base64ImageData = snapshotCanvas.toDataURL('image/png').split(',')[1];
+            await getCritique(base64ImageData);
+        }
+
+        /**
+         * Sends image to Gemini and speaks the critique.
+         * @param {string} base64ImageData - The base64 encoded image data.
+         */
+        async function getCritique(base64ImageData) {
+            // Set loading state
+            criticContainer.classList.remove('hidden');
+            criticContainer.classList.add('flex');
+            criticLoader.classList.remove('hidden');
+            startButton.disabled = true;
+            photoButton.disabled = true;
+            window.speechSynthesis.cancel(); // Cancel any previous speech
+
+            const prompt = "You are a scathing, pretentious art critic with a sharp wit. Provide a short, one-sentence, funny, and brutally honest critique of this artwork. Be dramatic.";
+            
+            const payload = {
+              contents: [
+                {
+                  role: "user",
+                  parts: [
+                    { text: prompt },
+                    {
+                      inlineData: {
+                        mimeType: "image/png",
+                        data: base64ImageData
+                      }
+                    }
+                  ]
+                }
+              ],
+            };
+
+            const apiKey = ""; // API key is handled by the environment
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+
+            try {
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`API Error: ${response.statusText}`);
+                }
+
+                const result = await response.json();
+                
+                if (result.candidates && result.candidates[0]?.content?.parts[0]?.text) {
+                    const critiqueText = result.candidates[0].content.parts[0].text;
+                    speakText(critiqueText);
+                } else {
+                    speakText("I am... speechless. And not in a good way.");
+                    console.error("Unexpected API response structure:", result);
+                }
+
+            } catch (error) {
+                console.error("Error fetching critique:", error);
+                speakText("My genius is wasted here. There was an error.");
+            } finally {
+                criticLoader.classList.add('hidden');
+            }
+        }
+        
+        /**
+         * Uses browser's SpeechSynthesis to speak the given text.
+         * @param {string} text - The text to be spoken.
+         */
+        function speakText(text) {
+            if (!('speechSynthesis' in window)) {
+                console.warn("Speech Synthesis not supported in this browser.");
+                // Re-enable buttons if TTS is not supported
+                startButton.disabled = false;
+                photoButton.disabled = false;
+                return;
+            }
+
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.rate = 0.9;
+            utterance.pitch = 0.8;
+            
+            // Add animation events
+            utterance.onstart = () => {
+                criticEmoji.classList.add('pulsing');
+            };
+            utterance.onend = () => {
+                criticEmoji.classList.remove('pulsing');
+                // Re-enable buttons after critique is finished
+                startButton.disabled = false;
+                photoButton.disabled = false;
+            };
+            utterance.onerror = (event) => {
+                console.error("SpeechSynthesis Error:", event.error);
+                criticEmoji.classList.remove('pulsing');
+                startButton.disabled = false;
+                photoButton.disabled = false;
+            };
+
+            window.speechSynthesis.speak(utterance);
+        }
+
+    </script>
+</body>
+</html>
